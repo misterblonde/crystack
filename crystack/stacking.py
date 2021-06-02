@@ -208,7 +208,7 @@ class PiStacks:
                 if passed:
                     r_pos_ring = self.is_ring_terminal(r)
                     l_pos_ring = self.is_ring_terminal(l)
-                    print("Relevant stack: ", d, "Type of Int: ", ptype, "Offset: ", offset)
+                    # print("Relevant stack: ", d, "Type of Int: ", ptype, "Offset: ", offset)
                     self.pi_stacks.append(data(ringA=r, ringB=l, distance=d, angle=angle, offset=offset,
                                 type=ptype, position_ringA=r_pos_ring,
                                 position_ringB=l_pos_ring))

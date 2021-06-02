@@ -1,3 +1,4 @@
+from re import I
 import numpy as np
 import sys
 import pandas as pd
@@ -11,7 +12,9 @@ from pymatgen.core.structure import Structure
 
 from pymatgen.analysis.graphs import StructureGraph
 from pymatgen.analysis.local_env import JmolNN  # used for deciding which atoms are bonded
-from utilities import centroid
+#from utilities import centroid
+from .utilities import euclidean3d
+import csv
 """
 
 PYMATGEN ALTERNATIVE TO BUILDING THE SUPERCELL FROM CIF FILE
@@ -31,6 +34,12 @@ INPUT:
 OUTPUT:
 - dimer xyz (nonreal)
 """
+def make_header(n_atoms):
+    dimer_n_atoms = str(n_atoms * 2)
+    with open('header_dimer', 'w') as the_file:
+        the_file.write(f"{dimer_n_atoms}\n\n")
+
+# def convert_xyz_mol():
 
 class Crystal:
 
@@ -63,12 +72,30 @@ class Crystal:
         ]
         s = Structure.from_file(self.filn)
         s.make_supercell(scaling_matrix, to_unit_cell=False)
-        xyzrep = XYZ(s) # convert to xyz
-        # print(np.shape(s))  # n
-        xyzrep.write_file(f"{basen}_supercell.xyz")  # write supercell to file
+        self.xyzrep = XYZ(s) # convert to xyz
+        self.basen = self.filn.split(".")[0]
+        self.xyzrep.write_file(f"{self.basen}_supercell.xyz")  # write supercell to file
+        # print(np.shape(self.xyzrep.molecule))
+        # print(self.xyzrep.molecule)
+
+    @staticmethod
+    def distance(self):
+        return np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)  
 
     def find_molecules(self):
-       pass 
+        #         Rcov(x) + Rcov(y) - t < R(x,y) < Rcov(x) + Rcov(y) + t
+        # where Rcov is the covalent radius and the tolarenace (t) is set to 0.4 Angstrom.
+        n, label, x, y, z = self.xyzrep.split
+        array = np.array(x,y,z)
+        dist=[[0]*len(array[0])]*len(array)  
+        for i in range(len(array)-1):  
+            for j in range(i+1,len(array)):  
+                dist[i][j]=distance(array[i],array[j])  
+
+        # d = ((x2 - x1)2 + (y2 - y1)2 + (z2 - z1)2)1/2   
+        # n, label, x, y, z = self.xyzrep
+        pass
+
     # # find centre-of-mass of supercell and return all COMs and mols xyz.
     # centroid, coms_list, all_mols = find_supercell_centre(basen)
 
@@ -187,6 +214,7 @@ def find_closest_packed_dimers(closest, closest_idx, coms_list):
 def generate_sm_xyz(central_top, all_mols):
     # Generates single molecule real_xyz files
     for idx in central_top:
+        print(all_mols[idx])
         all_mols[idx].dump_molecule(
             "./mol_{0}.pdb".format(idx),
             include_coms=False,
@@ -194,6 +222,13 @@ def generate_sm_xyz(central_top, all_mols):
         sp.call(f"obabel -ipdb mol_{idx}.pdb -oxyz mol_{idx}.xyz > mol_{idx}.xyz", shell=True)
     sp.call("rm mol_*.pdb", shell=True)
 
+
+def write_dimer_xyz():
+    with open("file.xyz", 'w') as xyz_file:
+        xyz_file.write("%d\n%s\n" % (len(molecule.atoms), title))
+        for atom in molecule.atoms:
+            xyz_file.write("{:4} {:11.6f} {:11.6f} {:11.6f}\n".format(
+                atom.atomic_symbol, atom.coordinates.x, atom.coordinates.y, atom.coordinates.z))
 
 def generate_dimer_xyz(idx_closest, central_top):
     """
@@ -205,6 +240,7 @@ def generate_dimer_xyz(idx_closest, central_top):
         shell=True)
 
     # makes dimer files from monomers
+    orient_dict = {}
     for idx, name in enumerate(central_top[1:]):  # start from 2nd mol in list
         sp.call(f"tail -n +3 mol_{name}.xyz > nonreal_{name}.xyz", shell=True)
         # rm header
@@ -218,38 +254,87 @@ def generate_dimer_xyz(idx_closest, central_top):
         sp.call(
             f"cat header_dimer dimer_{idx_closest}_{name}.xyz > \
                 real_dimer_{idx_closest}_{name}.xyz", shell=True)
+        
+        dominant_dir = find_abc_orientation(name, idx_closest)
+        orient_dict[name] = dominant_dir
 
-        # open dimers in vesta
-        # sp.call(f"open real_dimer_{idx_closest}_{name}.xyz", shell=True)
+        sp.call(f"obabel -ixyz real_dimer_{idx_closest}_{name}.xyz -omol real_dimer_{idx_closest}_{name}.mol > real_dimer_{idx_closest}_{name}.mol", shell=True)
 
-# OUTPUT settings:
-out_mol = 5
-# number of unique nearest neighbour dimers you want to
-# extract from crystal
+        sp.call(f"rm real_dimer_{idx_closest}_{name}.xyz", shell=True)
+        sp.call(f"rm dimer_{idx_closest}_{name}.xyz", shell=True)
+        sp.call(f"rm nonreal_{name}.xyz", shell=True)
+        sp.call(f"rm mol_{name}.xyz", shell=True)
 
-# Input handling
-filn = sys.argv[1]
-basen = filn.split(".")[0]
-n_atoms = int(sys.argv[2]) # n atoms per mol
+    return orient_dict
 
-crystal_to_generate = Crystal(filn, n_atoms)
-crystal_to_generate.create_supercell()
+def run_dimer_generator(filn, n_atoms, out_mol=5):
+    # OUTPUT settings:
+    # out_mol = 5
+    # number of unique nearest neighbour dimers you want to
+    # extract from crystal
 
-# find centre-of-mass of supercell and return all COMs and mols xyz.
-centroid, coms_list, all_mols = crystal_to_generate.find_supercell_centre()
+    # Input handling
+    #filn = sys.argv[1]
+    #self.basen = filn.split(".")[0]
+    #ibasen = filn.split(".")[0]
+    #n_atoms = int(sys.argv[2]) # n atoms per mol
 
-# find molecule closest to centroid of supercell
-closest, idx_closest = crystal_to_generate.closest_node(centroid, coms_list)
+    make_header(n_atoms)
+    crystal_to_generate = Crystal(filn, n_atoms)
+    crystal_to_generate.create_supercell()
 
-# get list of all the unique closest dimers in ascending order
-clean = find_closest_packed_dimers(closest, idx_closest, coms_list)
+    # crystal_to_generate.find_molecules()
 
-# make dimer xyz files for (25 or) 15 closest molecules
-central_top = clean[:out_mol+1].index.values.tolist()
+    # find centre-of-mass of supercell and return all COMs and mols xyz.
+    supercell_centroid, coms_list, all_mols = crystal_to_generate.find_supercell_centre()
 
-# makes single molecule xyz files (rm pdb files created during this)
-generate_sm_xyz(central_top, all_mols)
+    # find molecule closest to centroid of supercell
+    closest, idx_closest = crystal_to_generate.closest_node(supercell_centroid, coms_list)
 
-# make dimer xyz
-generate_dimer_xyz(idx_closest, central_top)
-# use the closest 5-6 mols as dimers
+    # get list of all the unique closest dimers in ascending order
+    clean = find_closest_packed_dimers(closest, idx_closest, coms_list)
+
+    # make dimer xyz files for (25 or) 15 closest molecules
+    central_top = clean[:out_mol+1].index.values.tolist()
+
+    # makes single molecule xyz files (rm pdb files created during this)
+    generate_sm_xyz(central_top, all_mols)
+
+    # make dimer xyz
+    orient_dict = generate_dimer_xyz(idx_closest, central_top)
+    # # use the closest 5-6 mols as dimers
+    # with open('dominant_orientations.csv', 'w') as csv_file:  
+    # writer = csv.writer(csv_file)
+    # for key, value in orientations_dict.items():
+    #     writer.writerow([key, value])
+
+    sp.call("rm header_dimer", shell=True)
+    return orient_dict
+
+
+def find_abc_orientation(idx1, idx_origin):
+    coms_file = pd.read_csv("coms_distance_sorted.csv", index_col=0)
+    # print(coms_file.head())
+    row1 = coms_file.loc[idx1]
+    row2 = coms_file.loc[idx_origin]
+    # print(row1)
+    # print(row2)
+
+    orientation_vec = [row1.x- row2.x, row1.y - row2.y, row1.z - row2.z]
+    # print(idx1, idx_origin)
+
+    absolute_orientations = list(map(abs, orientation_vec))
+    max_value = max(absolute_orientations)
+    max_index = absolute_orientations.index(max_value)
+    #print(max_index)
+
+    if max_index == 0:
+        # print("a")
+        return "a"
+    elif max_index == 1:
+        # print("b")
+        return "b"
+    else: 
+        # print("c")
+        return "c"
+    

@@ -42,7 +42,7 @@ class Dimer:
         obConversion.ReadFile(self.omol, f"{self.basen}.mol")
         self.all_atoms = pybel.Molecule(self.omol)
         n_atoms = self.omol.NumAtoms()
-        print("n_atoms(dimer): ", n_atoms)
+        #print("n_atoms(dimer): ", n_atoms)
         separate_mols = [m for m in self.omol.Separate()]
         self.MolA, self.MolB = pybel.Molecule(separate_mols[0]),\
                                pybel.Molecule(separate_mols[1])
