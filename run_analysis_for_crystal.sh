@@ -1,7 +1,9 @@
 # CONSTANTS PER LANDSCAPE:
-n_rings=11 
+n_rings=9
+#10: 66
+#11: 72 
 #12: 78
-n_atoms=72
+n_atoms=60
 
 # CRYSTAL VARIABLES:
 crystal_no=$1
@@ -27,8 +29,13 @@ python crystack_degree_of_pi_stacking_per_mol_in_crystal.py opt_"$crystal_no".ci
 conda deactivate
 
 
+mkdir dim_"$crystal_no" 
+mv real_dimer_*_*.mol dim_"$crystal_no"
+zip -r dim_"$crystal_no".zip  dim_"$crystal_no"
+
 rm coms_distance_sorted.csv
-rm real_dimer_*_*.mol
+#rm real_dimer_*_*.mol
+rm -r dim_"$crystal_no"
 rm mol_*.xyz
 rm nonreal_*.xyz
 rm opt_"$crystal_no"_supercell.xyz
