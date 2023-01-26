@@ -11,5 +11,6 @@ modifying the automation script: ```run_analysis_for_crystal.sh```
 
 
 Raw Molecular Data: ```data/```
+Residuals files of Molecular Crystals: ```res/```
 Preliminary results plots: ```Figures/```
  
